@@ -1,0 +1,222 @@
+package Herramientas;
+
+import EstructurasDatos.ControlExpresiones;
+import Objetos.RegistroError;
+import Objetos.RegistroLexema;
+import java.util.ArrayList;
+
+/**
+ *
+ * @author SERGIO
+ */
+public class Analizador {
+
+    private int posiciónColumna, posiciónFila, tipoToken;
+    private ArrayList<RegistroLexema> regLexemas;
+    private ArrayList<RegistroError> regErrores;
+    private String lexemaActual;
+    private boolean estadoError;
+
+    public Analizador() {
+        this.tipoToken = 0;
+        this.posiciónColumna = this.posiciónFila = 0;
+        this.estadoError = false;
+        this.regLexemas = new ArrayList<>();
+        this.regErrores = new ArrayList<>();
+    }
+
+    public boolean análisis(ArrayList<char[]> lineas) {
+        ArrayList<String> tokensEnLinea;
+        tokensEnLinea = new ArrayList<>();
+        for (char[] linea : lineas) {
+            tokensEnLinea = extraerTokens(linea);
+            for (String string : tokensEnLinea) {
+               if(string.length()>0){
+                   if(string.equals(";"))
+                       System.out.println("Lexema: "+string);
+                   if (!perteneceLenguaje(string)) {
+                    this.estadoError = true;
+                    this.regErrores.add(new RegistroError(this.lexemaActual, this.posiciónFila, this.posiciónColumna));
+                }
+               }
+            }
+            this.posiciónFila++;
+        }
+        this.estadoError = false;
+        return true;
+    }
+
+    public ArrayList<String> extraerTokens(char[] linea) {
+        ArrayList<String> dev = new ArrayList<>();
+        String lexema = "";
+        this.posiciónColumna = 0;
+        for (int i = 0; i < linea.length; i++) {
+            
+            if (linea[i] != ' ') {
+                if (linea[i] != '\t') {
+                    if ( linea[i]>0) {
+                        lexema += linea[i];
+                    } else {
+                        if(evaluadorCaracter(linea[i])==2){
+                            dev.add(String.valueOf(linea[i]));
+                        }
+                        dev.add(lexema);
+                        this.tipoToken = evaluadorCaracter(linea[i]);
+                    }
+                }
+            } else {
+                //System.out.println("Agregando lexema: "+lexema);
+                dev.add(lexema);
+                lexema = "";
+            }
+        }
+        return dev;
+    }
+
+    private boolean perteneceLenguaje(String lexema) {
+        if (esReservada(ControlExpresiones.PALABRAS_RESERVADAS, lexema)) {
+            return true;
+        } else if (esCaracterSimple(ControlExpresiones.CARACTERES_SIMPLES, lexema)) {
+            return true;
+        } else if (esIdentificador(lexema)) {
+            return true;
+        } else if (esNumEntero(lexema)) {
+            return true;
+        } else if (esNumPuntoFlotante(lexema)) {
+            return true;
+        }
+        return false;
+
+    }
+
+    private boolean esReservada(RegistroLexema[] palabrasReservadas, String lexema) {
+        for (RegistroLexema palabraReservada : palabrasReservadas) {
+            if (palabraReservada.getLexema().equals(lexema) && Character.isLowerCase(lexema.toCharArray()[0])) {
+                if (!MultiHerramientas.existeLexemaEnLista(regLexemas, palabraReservada)) {
+                    System.out.println("Agregando " + lexema + " como palabra reservada");
+                    this.regLexemas.add(palabraReservada);
+                } else {
+                    System.out.println("No se pudo agregar " + lexema + " como palabra reservada");
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean esCaracterSimple(char[] caracteresSimples, String palabra) {
+        RegistroLexema lexema;
+        if (palabra.length() == 1) {
+            for (char caracterSimple : caracteresSimples) {
+                if (palabra.toCharArray()[0] == caracterSimple) {
+                    lexema = new RegistroLexema(palabra, "Carácter Simple", Conversores.caracter_aASCII(palabra.toCharArray()[0]));
+                    if (!MultiHerramientas.existeLexemaEnLista(regLexemas, lexema)) {
+                        System.out.println("Agregando " + lexema + " como palabra reservada");
+                        this.regLexemas.add(lexema);
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean esIdentificador(String lexema) {
+        char[] lexemaCaracter;
+        int nNuevoAtributo;
+        RegistroLexema lexemaO;
+        lexemaCaracter = lexema.toCharArray();
+        nNuevoAtributo = MultiHerramientas.maxAttrLexema(regLexemas);
+        System.out.println("Caracter analizado como identificador:"+lexema+" Tamaño: "+lexema.length());
+        if (Character.isUpperCase(lexemaCaracter[0])
+                && Character.isLetterOrDigit(lexemaCaracter[lexemaCaracter.length - 1])) {
+            lexemaO = new RegistroLexema(lexema, "identificador", nNuevoAtributo);
+            if (!MultiHerramientas.existeLexemaEnLista(regLexemas, lexemaO)) {
+                System.out.println("Agregando " + lexema + " como palabra identificador");
+                this.regLexemas.add(lexemaO);
+            }
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean esNumEntero(String lexema) {
+        char[] lexChar = lexema.toCharArray();
+        int atributo = MultiHerramientas.buscarAtributoPorClasificación(regLexemas, "Número entero");
+        RegistroLexema nuevoLexema;
+        if (MultiHerramientas.esNuemeroEntero(lexema)) {
+            if ((lexChar[0] != '0' && !lexema.contains("."))) {
+                nuevoLexema = new RegistroLexema(lexema, "Número entero", atributo);
+                if (!MultiHerramientas.existeLexemaEnLista(this.regLexemas, nuevoLexema)) {
+                    System.out.println("Agregando " + lexema + " como número entero");
+                    this.regLexemas.add(nuevoLexema);
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean esNumPuntoFlotante(String lexema) {
+        char[] lexChar = lexema.replace(' ', '\0').toCharArray();
+        int atributo = MultiHerramientas.buscarAtributoPorClasificación(regLexemas, "Número de punto flotante");
+        RegistroLexema nuevoLex;
+        if (lexema.contains(".")
+                && lexChar[0] != '.'
+                && Character.isDigit(lexChar[lexChar.length - 1])) {
+            nuevoLex = new RegistroLexema(lexema, "Número de punto flotante", atributo);
+            if (!MultiHerramientas.existeLexemaEnLista(regLexemas, nuevoLex)) {
+                System.out.println("Agregando " + lexema + " como número punto flotante");
+                this.regLexemas.add(nuevoLex);
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public int evaluadorCaracter(char token) {
+        if (token != ' ') {
+            if (Character.isLetter(token)) {
+                return 0;
+            }if (Character.isDigit(token)) {
+                return 1;
+            }if (token == ';' || token == '=' || token == '+' || token == '-'
+                    || token == '*' || token == '(' || token == ')'
+                    || token == '{' || token == '}' || token == ',') {
+                return 2;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * ************************************************************************
+     */
+    /**
+     * **************************Métodos de acceso*****************************
+     */
+    /**
+     * ************************************************************************
+     */
+    public int getPosiciónColumna() {
+        return posiciónColumna;
+    }
+
+    public int getPosiciónFila() {
+        return posiciónFila;
+    }
+
+    public boolean isEstadoError() {
+        return this.estadoError;
+    }
+
+    public ArrayList<RegistroLexema> getRegLexemas() {
+        return regLexemas;
+    }
+
+    public ArrayList<RegistroError> getRegErrores() {
+        return regErrores;
+    }
+
+}
